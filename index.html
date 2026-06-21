@@ -4,20 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Private Number Chat</title>
-    <!-- PeerJS for P2P WebRTC Connections -->
     <script src="https://unpkg.com"></script>
 
     <style>
         :root {
-            --bg-dark: #070f2b;
-            --bg-light: #1b1a55;
-            --blue-accent: #535c91;
-            --blue-bright: #9290c3;
+            --bg-dark: #000000;
+            --bg-light: #070f2b;
+            --blue-accent: #1b1a55;
+            --blue-bright: #535c91;
+            --blue-glow: #00d2ff;
             --text-color: #e6e6e6;
         }
 
         body {
             background-color: var(--bg-dark);
+            background-image: linear-gradient(135deg, #000000 0%, #070f2b 100%);
             color: var(--text-color);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
@@ -29,42 +30,45 @@
 
         h2 {
             margin-top: 20px;
-            color: var(--blue-bright);
+            color: var(--blue-glow);
+            text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
         }
 
         .top-bar {
-            background-color: var(--bg-light);
+            background-color: var(--blue-accent);
             width: 90%;
             max-width: 500px;
             padding: 15px;
             border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
             display: flex;
             gap: 10px;
             align-items: center;
             justify-content: center;
             margin-bottom: 20px;
+            border: 1px solid var(--blue-bright);
         }
 
         label {
             font-size: 0.9rem;
-            color: var(--blue-bright);
+            color: #ffffff;
             font-weight: bold;
         }
 
         input[type="number"] {
             background-color: #000000;
-            color: var(--blue-bright);
-            border: 2px solid var(--blue-accent);
+            color: var(--blue-glow);
+            border: 2px solid var(--blue-bright);
             padding: 10px;
             border-radius: 5px;
             font-size: 1.1rem;
             width: 150px;
             text-align: center;
+            outline: none;
         }
 
         button {
-            background-color: var(--blue-accent);
+            background-color: var(--blue-bright);
             color: white;
             border: none;
             padding: 10px 15px;
@@ -75,21 +79,29 @@
         }
 
         button:hover {
-            background-color: var(--blue-bright);
-            color: var(--bg-dark);
+            background-color: var(--blue-glow);
+            color: #000;
+            box-shadow: 0 0 10px var(--blue-glow);
+        }
+
+        button:disabled {
+            background-color: #333;
+            color: #777;
+            cursor: not-allowed;
+            box-shadow: none;
         }
 
         .chat-container {
-            background-color: var(--bg-light);
+            background-color: rgba(7, 15, 43, 0.8);
             width: 90%;
             max-width: 500px;
             height: 60vh;
             border-radius: 10px;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
             overflow: hidden;
-            border: 1px solid var(--blue-accent);
+            border: 1px solid var(--blue-bright);
         }
 
         #chat-box {
@@ -110,6 +122,7 @@
 
         .message.received {
             background-color: var(--blue-accent);
+            border: 1px solid var(--blue-bright);
             align-self: flex-start;
         }
 
@@ -121,47 +134,49 @@
 
         .message.system {
             background-color: transparent;
-            color: var(--blue-bright);
+            color: var(--blue-glow);
             align-self: center;
             font-style: italic;
             font-size: 0.85rem;
+            text-align: center;
         }
 
         .bottom-bar {
             padding: 15px;
-            background-color: #0c1033;
+            background-color: #000000;
             display: flex;
             gap: 10px;
+            border-top: 1px solid var(--blue-accent);
         }
 
         #message-input {
             flex: 1;
-            background-color: #000;
-            color: var(--blue-bright);
-            border: 1px solid var(--blue-accent);
+            background-color: #070f2b;
+            color: #fff;
+            border: 1px solid var(--blue-bright);
             padding: 10px;
             border-radius: 5px;
             outline: none;
         }
 
         #message-input:focus {
-            border-color: var(--blue-bright);
+            border-color: var(--blue-glow);
         }
     </style>
 </head>
 <body>
 
-    <h2>Secure Number Chat</h2>
+    <h2>Secure Blue/Black Chat</h2>
 
     <div class="top-bar">
-        <label for="room-number">Enter Room #:</label>
-        <input type="number" id="room-number" placeholder="e.g. 1234">
-        <button id="join-btn" onclick="joinRoom()">Join</button>
+        <label for="room-number">Enter Number:</label>
+        <input type="number" id="room-number" placeholder="e.g. 5555">
+        <button id="join-btn" onclick="initPeer()">Connect</button>
     </div>
 
     <div class="chat-container">
         <div id="chat-box">
-            <div class="message system">Enter a number and click Join to start messaging.</div>
+            <div class="message system">Enter a matching number on two different devices/tabs to chat.</div>
         </div>
         <div class="bottom-bar">
             <input type="text" id="message-input" placeholder="Type a message..." disabled>
@@ -170,11 +185,9 @@
     </div>
 
     <script>
-        let peer;
-        let conn;
-        let isConnected = false;
-        let myId = Math.floor(Math.random() * 1000000); // Random user ID
-
+        let peer = null;
+        let conn = null;
+        
         const chatBox = document.getElementById('chat-box');
         const roomInput = document.getElementById('room-number');
         const messageInput = document.getElementById('message-input');
@@ -189,48 +202,76 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function joinRoom() {
-            const roomNumber = roomInput.value;
+        function initPeer() {
+            const roomNumber = roomInput.value.trim();
             if (!roomNumber) {
                 alert("Please enter a number first.");
                 return;
             }
 
-            // Disable UI
             joinBtn.disabled = true;
             roomInput.disabled = true;
-            appendMessage(`Joining room ${roomNumber}...`, 'system');
+            appendMessage("Connecting to signaling server...", "system");
 
-            // Initialize PeerJS
-            // The Peer ID is generated based on the room number, so anyone using the same number connects
-            peer = new Peer(`secret-number-chat-room-${roomNumber}`);
+            // spec
+            peer = new Peer(`room-${roomNumber}-user-${Math.floor(Math.random() * 10000)}`, {
+                host: '://peerjs.com',
+                port: 443,
+                secure: true,
+                debug: 1
+            });
 
             peer.on('open', (id) => {
-                // Once connected to the network, attempt to connect to the "host" of this room number
-                connectToPeer(`secret-number-chat-room-${roomNumber}`);
-            });
-
-            // Handle incoming P2P connections
-            peer.on('connection', (connection) => {
-                if (isConnected) return;
+                appendMessage("Waiting for someone else to connect to this number...", "system");
                 
-                conn = connection;
-                setupConnection();
+                // scan
+                setTimeout(() => {
+                    discoverPeers(roomNumber);
+                }, 1000);
+            });
+
+            peer.on('connection', (incomingConn) => {
+                handleIncomingConnection(incomingConn);
+            });
+
+            peer.on('error', (err) => {
+                console.error(err);
+                appendMessage(`Connection Error. Retrying...`, "system");
+                resetUI();
             });
         }
 
-        function connectToPeer(targetPeerId) {
-            conn = peer.connect(targetPeerId);
-            setupConnection();
+        function discoverPeers(roomNumber) {
+            // Find active sessions on the server network matching this number prefix
+            if (!peer || peer.destroyed) return;
+            
+            peer.listAllPeers((peers) => {
+                const targets = peers.filter(pId => pId.startsWith(`room-${roomNumber}-`) && pId !== peer.id);
+                if (targets.length > 0) {
+                    // Found a peer! Connect directly
+                    connectToPeer(targets[0]);
+                }
+            });
         }
 
-        function setupConnection() {
+        function connectToPeer(targetId) {
+            appendMessage("Found someone! Establishing private tunnel...", "system");
+            conn = peer.connect(targetId, { reliable: true });
+            setupConnectionHandlers();
+        }
+
+        function handleIncomingConnection(incomingConn) {
+            if (conn) return; // Already connected
+            conn = incomingConn;
+            setupConnectionHandlers();
+        }
+
+        function setupConnectionHandlers() {
             conn.on('open', () => {
-                isConnected = true;
-                appendMessage("Connected! You can now talk to anyone on this number.", 'system');
+                appendMessage("Connected! Chat session secure.", "system");
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
-                joinBtn.textContent = "Connected";
+                joinBtn.textContent = "Online";
             });
 
             conn.on('data', (data) => {
@@ -238,38 +279,39 @@
             });
 
             conn.on('close', () => {
-                appendMessage("Connection closed.", 'system');
-                resetChat();
+                appendMessage("The other person left.", "system");
+                resetUI();
+            });
+            
+            conn.on('error', () => {
+                appendMessage("Connection dropped.", "system");
+                resetUI();
             });
         }
 
         function sendMessage() {
-            const msg = messageInput.value;
-            if (msg.trim() !== '' && isConnected) {
+            const msg = messageInput.value.trim();
+            if (msg !== '' && conn && conn.open) {
                 conn.send(msg);
                 appendMessage(msg, 'sent');
                 messageInput.value = '';
             }
         }
 
-        function resetChat() {
-            isConnected = false;
+        function resetUI() {
+            if(conn) conn.close();
+            if(peer) peer.destroy();
+            conn = null;
+            peer = null;
             messageInput.disabled = true;
             sendBtn.disabled = true;
             joinBtn.disabled = false;
             roomInput.disabled = false;
-            joinBtn.textContent = "Join";
-            if(peer) peer.destroy();
+            joinBtn.textContent = "Connect";
         }
 
-        // Allow 'Enter' key to trigger Join/Send
-        roomInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') joinRoom();
-        });
-        
-        messageInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') sendMessage();
-        });
+        roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') initPeer(); });
+        messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     </script>
 </body>
 </html>
