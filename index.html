@@ -174,8 +174,11 @@
     <script>
         let roomNumber = null;
         let pollInterval = null;
-        let lastMessageCount = 0;
+        let lastTimestamp = 0;
         const myClientId = 'user-' + Math.floor(Math.random() * 10000000);
+        
+        const endpoint = 'https://supabase.co';
+        const publicToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsZmtudW53c2t2cGtmeXJ2dW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTI2MDUwMDAsImV4cCI6MjA4MDU4MTAwMH0.3_X8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ';
 
         const chatBox = document.getElementById('chat-box');
         const roomInput = document.getElementById('room-number');
@@ -197,73 +200,68 @@
 
             joinBtn.disabled = true;
             roomInput.disabled = true;
-            
             messageInput.disabled = false;
             sendBtn.disabled = false;
-            
             joinBtn.textContent = "Online";
             joinBtn.style.backgroundColor = "rgba(0, 210, 255, 0.2)";
             joinBtn.style.color = "var(--blue-glow)";
             joinBtn.style.border = "1px solid var(--blue-glow)";
 
             fetchMessages();
-            pollInterval = setInterval(fetchMessages, 1500);
-        }
-
-        function getStorageUrl() {
-            return `https://workers.dev{roomNumber}`;
+            pollInterval = setInterval(fetchMessages, 1000);
         }
 
         function fetchMessages() {
             if (!roomNumber) return;
-            
-            fetch(getStorageUrl())
-                .then(res => res.ok ? res.json() : [])
-                .then(messages => {
-                    if (messages.length > lastMessageCount) {
-                        const newMessages = messages.slice(lastMessageCount);
-                        newMessages.forEach(msg => {
-                            if (msg.senderId !== myClientId) {
-                                appendMessage(msg.text, 'received');
-                            }
-                        });
-                        lastMessageCount = messages.length;
+
+            fetch(`${endpoint}?room_id=eq.${roomNumber}&created_at=gt.${lastTimestamp}&order=created_at.asc`, {
+                headers: {
+                    'apikey': publicToken,
+                    'Authorization': `Bearer ${publicToken}`
+                }
+            })
+            .then(res => res.json())
+            .then(messages => {
+                messages.forEach(msg => {
+                    const msgTime = new Date(msg.created_at).getTime();
+                    if (msgTime > lastTimestamp) {
+                        lastTimestamp = msgTime;
                     }
-                })
-                .catch(() => {});
+                    if (msg.sender_id !== myClientId) {
+                        appendMessage(msg.text, 'received');
+                    } else {
+                        appendMessage(msg.text, 'sent');
+                    }
+                });
+            })
+            .catch(() => {});
         }
 
         function sendMessage() {
             const msg = messageInput.value.trim();
             if (msg === '' || !roomNumber) return;
 
-            const url = getStorageUrl();
             messageInput.value = '';
 
-            fetch(url)
-                .then(res => res.ok ? res.json() : [])
-                .then(messages => {
-                    const newPayload = {
-                        senderId: myClientId,
-                        text: msg,
-                        time: Date.now()
-                    };
-                    
-                    let updated = [...messages, newPayload];
-                    if (updated.length > 40) updated.shift();
-
-                    return fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updated)
-                    });
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'apikey': publicToken,
+                    'Authorization': `Bearer ${publicToken}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    room_id: parseInt(roomNumber),
+                    sender_id: myClientId,
+                    text: msg
                 })
-                .then(() => {
-                    appendMessage(msg, 'sent');
-                    lastMessageCount++;
-                    messageInput.focus();
-                })
-                .catch(() => {});
+            })
+            .then(() => {
+                fetchMessages();
+                messageInput.focus();
+            })
+            .catch(() => {});
         }
 
         roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connectToRoom(); });
