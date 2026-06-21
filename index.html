@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Number Chat</title>
-    <!-- MQTT over WebSockets library for robust cross-device bridging -->
+
     <script src="https://cloudflare.com"></script>
 
     <style>
@@ -27,7 +27,7 @@
             flex-direction: column;
             align-items: center;
             height: 100vh;
-            height: -webkit-fill-available; /* Fix for iOS Safari address bar height */
+            height: -webkit-fill-available;
         }
 
         h2 {
@@ -70,7 +70,7 @@
             width: 120px;
             text-align: center;
             outline: none;
-            -webkit-appearance: none; /* Removes iOS input styling styling */
+            -webkit-appearance: none; 
         }
 
         button {
@@ -194,7 +194,7 @@
 
     <div class="chat-container">
         <div id="chat-box">
-            <div class="message system">Enter a matching number on your PC and iPhone to sync instantly.</div>
+            <div class="message system">Enter ID.</div>
         </div>
         <div class="bottom-bar">
             <input type="text" id="message-input" placeholder="Type a message..." disabled>
@@ -219,7 +219,7 @@
             msgDiv.className = `message ${type}`;
             msgDiv.textContent = text;
             chatBox.appendChild(msgDiv);
-            // Instant scroll execution
+
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
