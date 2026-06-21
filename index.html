@@ -17,7 +17,278 @@
         body {
             background-color: var(--bg-dark);
             background-image: linear-gradient(135deg, #000000 0%, #070f2b 100%);
+            color: var(--text-color);<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <style>
+        :root {
+            --bg-dark: #000000;
+            --bg-light: #070f2b;
+            --blue-accent: #1b1a55;
+            --blue-bright: #535c91;
+            --blue-glow: #00d2ff;
+            --text-color: #e6e6e6;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: linear-gradient(135deg, #000000 0%, #070f2b 100%);
             color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
+
+        .top-bar {
+            background-color: var(--blue-accent);
+            width: 90%;
+            max-width: 500px;
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            border: 1px solid var(--blue-bright);
+            box-sizing: border-box;
+        }
+
+        input[type="number"] {
+            background-color: #000000;
+            color: var(--blue-glow);
+            border: 2px solid var(--blue-bright);
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            width: 120px;
+            text-align: center;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        button {
+            background-color: var(--blue-bright);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        }
+
+        button:hover {
+            background-color: var(--blue-glow);
+            color: #000;
+            box-shadow: 0 0 10px var(--blue-glow);
+        }
+
+        button:disabled {
+            background-color: #222;
+            color: #666;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .chat-container {
+            background-color: rgba(7, 15, 43, 0.85);
+            width: 90%;
+            max-width: 500px;
+            flex: 1;
+            margin-bottom: 20px;
+            max-height: 70vh;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+            overflow: hidden;
+            border: 1px solid var(--blue-bright);
+            box-sizing: border-box;
+        }
+
+        #chat-box {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            padding: 10px 14px;
+            border-radius: 18px;
+            max-width: 75%;
+            word-break: break-word;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .message.received {
+            background-color: var(--blue-accent);
+            border: 1px solid var(--blue-bright);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.sent {
+            background-color: #2b397c;
+            color: #fff;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bottom-bar {
+            padding: 12px;
+            background-color: #000000;
+            display: flex;
+            gap: 10px;
+            border-top: 1px solid var(--blue-accent);
+            align-items: center;
+        }
+
+        #message-input {
+            flex: 1;
+            background-color: #070f2b;
+            color: #fff;
+            border: 1px solid var(--blue-bright);
+            padding: 10px;
+            border-radius: 5px;
+            outline: none;
+            font-size: 1rem;
+            -webkit-appearance: none;
+        }
+
+        #message-input:focus {
+            border-color: var(--blue-glow);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <input type="number" id="room-number" placeholder="Number" inputmode="numeric">
+        <button id="join-btn" onclick="connectToRoom()">Connect</button>
+    </div>
+
+    <div class="chat-container">
+        <div id="chat-box"></div>
+        <div class="bottom-bar">
+            <input type="text" id="message-input" placeholder="Message" disabled>
+            <button id="send-btn" onclick="sendMessage()" disabled>Send</button>
+        </div>
+    </div>
+
+    <script>
+        let roomNumber = null;
+        let pollInterval = null;
+        let lastTimestamp = "1970-01-01T00:00:00.000Z";
+        const myClientId = 'user-' + Math.floor(Math.random() * 10000000);
+        
+        const endpoint = 'https://supabase.co';
+        const publicToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsZmtudW53c2t2cGtmeXJ2dW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTI2MDUwMDAsImV4cCI6MjA4MDU4MTAwMH0.3_X8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ';
+
+        const chatBox = document.getElementById('chat-box');
+        const roomInput = document.getElementById('room-number');
+        const messageInput = document.getElementById('message-input');
+        const joinBtn = document.getElementById('join-btn');
+        const sendBtn = document.getElementById('send-btn');
+
+        function appendMessage(text, type) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+            msgDiv.textContent = text;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function connectToRoom() {
+            roomNumber = roomInput.value.trim();
+            if (!roomNumber) return;
+
+            joinBtn.disabled = true;
+            roomInput.disabled = true;
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+            joinBtn.textContent = "Online";
+            joinBtn.style.backgroundColor = "rgba(0, 210, 255, 0.2)";
+            joinBtn.style.color = "var(--blue-glow)";
+            joinBtn.style.border = "1px solid var(--blue-glow)";
+
+            fetchMessages();
+            pollInterval = setInterval(fetchMessages, 1000);
+        }
+
+        function fetchMessages() {
+            if (!roomNumber) return;
+
+            fetch(`${endpoint}?room_id=eq.${roomNumber}&created_at=gt.${lastTimestamp}&order=created_at.asc`, {
+                headers: {
+                    'apikey': publicToken,
+                    'Authorization': `Bearer ${publicToken}`
+                }
+            })
+            .then(res => res.json())
+            .then(messages => {
+                if (!Array.isArray(messages)) return;
+                messages.forEach(msg => {
+                    if (msg.created_at > lastTimestamp) {
+                        lastTimestamp = msg.created_at;
+                    }
+                    if (msg.sender_id !== myClientId) {
+                        appendMessage(msg.text, 'received');
+                    } else {
+                        appendMessage(msg.text, 'sent');
+                    }
+                });
+            })
+            .catch(() => {});
+        }
+
+        function sendMessage() {
+            const msg = messageInput.value.trim();
+            if (msg === '' || !roomNumber) return;
+
+            messageInput.value = '';
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'apikey': publicToken,
+                    'Authorization': `Bearer ${publicToken}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    room_id: parseInt(roomNumber),
+                    sender_id: myClientId,
+                    text: msg
+                })
+            })
+            .then(() => {
+                fetchMessages();
+                messageInput.focus();
+            })
+            .catch(() => {});
+        }
+
+        roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connectToRoom(); });
+        messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    </script>
+</body>
+</html>
+
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             display: flex;
