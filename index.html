@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat</title>
-    <script src="https://cloudflare.com"></script>
-
     <style>
         :root {
             --bg-dark: #000000;
@@ -132,15 +130,6 @@
             border-bottom-right-radius: 4px;
         }
 
-        .message.system {
-            background-color: transparent;
-            color: var(--blue-glow);
-            align-self: center;
-            font-size: 0.85rem;
-            text-align: center;
-            padding: 5px;
-        }
-
         .bottom-bar {
             padding: 12px;
             background-color: #000000;
@@ -171,7 +160,7 @@
 
     <div class="top-bar">
         <input type="number" id="room-number" placeholder="Number" inputmode="numeric">
-        <button id="join-btn" onclick="connectToBridge()">Connect</button>
+        <button id="join-btn" onclick="connectToRoom()">Connect</button>
     </div>
 
     <div class="chat-container">
@@ -183,9 +172,10 @@
     </div>
 
     <script>
-        let client = null;
-        let currentTopic = null;
-        const myClientId = 'client-' + Math.floor(Math.random() * 10000000);
+        let roomNumber = null;
+        let pollInterval = null;
+        let lastMessageCount = 0;
+        const myClientId = 'user-' + Math.floor(Math.random() * 10000000);
 
         const chatBox = document.getElementById('chat-box');
         const roomInput = document.getElementById('room-number');
@@ -201,84 +191,83 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function connectToBridge() {
-            const roomNumber = roomInput.value.trim();
+        function connectToRoom() {
+            roomNumber = roomInput.value.trim();
             if (!roomNumber) return;
 
             joinBtn.disabled = true;
             roomInput.disabled = true;
+            
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+            
+            joinBtn.textContent = "Online";
+            joinBtn.style.backgroundColor = "rgba(0, 210, 255, 0.2)";
+            joinBtn.style.color = "var(--blue-glow)";
+            joinBtn.style.border = "1px solid var(--blue-glow)";
 
-            // Updated to port 8884 for proper HTTPS / TLS encrypted WebSocket connection
-            client = mqtt.connect('wss://://hivemq.com', {
-                clientId: myClientId,
-                clean: true,
-                connectTimeout: 4000,
-                reconnectPeriod: 2000
-            });
+            fetchMessages();
+            pollInterval = setInterval(fetchMessages, 1500);
+        }
 
-            client.on('connect', () => {
-                currentTopic = `sec-num-chat/room-${roomNumber}`;
-                
-                client.subscribe(currentTopic, { qos: 1 }, (err) => {
-                    if (!err) {
-                        messageInput.disabled = false;
-                        sendBtn.disabled = false;
-                        joinBtn.textContent = "Online";
-                        joinBtn.style.backgroundColor = "rgba(0, 210, 255, 0.2)";
-                        joinBtn.style.color = "var(--blue-glow)";
-                        joinBtn.style.border = "1px solid var(--blue-glow)";
-                    } else {
-                        resetUI();
+        function getStorageUrl() {
+            return `https://workers.dev{roomNumber}`;
+        }
+
+        function fetchMessages() {
+            if (!roomNumber) return;
+            
+            fetch(getStorageUrl())
+                .then(res => res.ok ? res.json() : [])
+                .then(messages => {
+                    if (messages.length > lastMessageCount) {
+                        const newMessages = messages.slice(lastMessageCount);
+                        newMessages.forEach(msg => {
+                            if (msg.senderId !== myClientId) {
+                                appendMessage(msg.text, 'received');
+                            }
+                        });
+                        lastMessageCount = messages.length;
                     }
-                });
-            });
-
-            client.on('message', (topic, payload) => {
-                try {
-                    const data = JSON.parse(payload.toString());
-                    if (data.senderId === myClientId) {
-                        appendMessage(data.text, 'sent');
-                    } else {
-                        appendMessage(data.text, 'received');
-                    }
-                } catch (e) {}
-            });
-
-            client.on('error', (err) => {
-                resetUI();
-            });
+                })
+                .catch(() => {});
         }
 
         function sendMessage() {
             const msg = messageInput.value.trim();
-            if (msg !== '' && client && client.connected && currentTopic) {
-                const payload = {
-                    senderId: myClientId,
-                    text: msg,
-                    timestamp: Date.now()
-                };
-                
-                client.publish(currentTopic, JSON.stringify(payload), { qos: 1 });
-                messageInput.value = '';
-                messageInput.focus();
-            }
+            if (msg === '' || !roomNumber) return;
+
+            const url = getStorageUrl();
+            messageInput.value = '';
+
+            fetch(url)
+                .then(res => res.ok ? res.json() : [])
+                .then(messages => {
+                    const newPayload = {
+                        senderId: myClientId,
+                        text: msg,
+                        time: Date.now()
+                    };
+                    
+
+                    let updated = [...messages, newPayload];
+                    if (updated.length > 40) updated.shift();
+
+                    return fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updated)
+                    });
+                })
+                .then(() => {
+                    appendMessage(msg, 'sent');
+                    lastMessageCount++;
+                    messageInput.focus();
+                })
+                .catch(() => {});
         }
 
-        function resetUI() {
-            if (client) {
-                client.end();
-            }
-            client = null;
-            currentTopic = null;
-            messageInput.disabled = true;
-            sendBtn.disabled = true;
-            joinBtn.disabled = false;
-            roomInput.disabled = false;
-            joinBtn.textContent = "Connect";
-            joinBtn.style = "";
-        }
-
-        roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connectToBridge(); });
+        roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connectToRoom(); });
         messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     </script>
 </body>
