@@ -66,6 +66,11 @@
             font-size: 0.9rem;
         }
 
+        button:hover {
+            background-color: var(--blue-glow);
+            color: #000;
+        }
+
         .chat-container {
             background-color: rgba(7, 15, 43, 0.85);
             width: 90%;
@@ -152,7 +157,8 @@
     <script>
         let roomNumber = null;
         let ws = null;
-        const myId = 'id' + Math.floor(Math.random() * 100000);
+        let activeTimer = null;
+        const myClientId = 'user-' + Math.floor(Math.random() * 10000000);
 
         const chatBox = document.getElementById('chat-box');
         const roomInput = document.getElementById('room-number');
@@ -174,46 +180,69 @@
 
             joinBtn.disabled = true;
             roomInput.disabled = true;
+            
             messageInput.disabled = false;
             sendBtn.disabled = false;
+            
             joinBtn.textContent = "Online";
 
-            ws = new WebSocket(`wss://://scaleway.com{roomNumber}/ws`);
+            startPollingEngine();
+        }
 
-            ws.onmessage = (event) => {
-                const raw = event.data;
-                if (!raw.includes('::')) return;
-                
-                const splitIdx = raw.indexOf('::');
-                const sender = raw.substring(0, splitIdx);
-                const msgText = raw.substring(splitIdx + 2);
+        function startPollingEngine() {
+            if (activeTimer) clearInterval(activeTimer);
+            executeFetch();
+            activeTimer = setInterval(executeFetch, 1000);
+        }
 
-                if (sender !== myId) {
-                    appendMessage(msgText, 'received');
-                }
-            };
-
-            ws.onerror = () => resetUI();
-            ws.onclose = () => resetUI();
+        function executeFetch() {
+            fetch(`https://allorigins.win{encodeURIComponent('https://ntfy.sh_' + roomNumber + '/json')}`)
+                .then(res => res.json())
+                .then(wrapper => {
+                    const rawLines = wrapper.contents.trim().split('\n');
+                    rawLines.forEach(line => {
+                        try {
+                            const parsed = JSON.parse(line);
+                            if (parsed.event === 'message' && parsed.message) {
+                                const separatorIndex = parsed.message.indexOf('::');
+                                if (separatorIndex !== -1) {
+                                    const id = parsed.message.substring(0, separatorIndex);
+                                    const txt = parsed.message.substring(separatorIndex + 2);
+                                    
+                                    const elementId = `msg-${parsed.id}`;
+                                    if (!document.getElementById(elementId)) {
+                                        const msgType = (id === myClientId) ? 'sent' : 'received';
+                                        
+                                        const msgDiv = document.createElement('div');
+                                        msgDiv.id = elementId;
+                                        msgDiv.className = `message ${msgType}`;
+                                        msgDiv.textContent = txt;
+                                        chatBox.appendChild(msgDiv);
+                                        chatBox.scrollTop = chatBox.scrollHeight;
+                                    }
+                                }
+                            }
+                        } catch (err) {}
+                    });
+                })
+                .catch(() => {});
         }
 
         function sendMessage() {
             const msg = messageInput.value.trim();
-            if (msg === '' || !ws || ws.readyState !== WebSocket.OPEN) return;
+            if (msg === '' || !roomNumber) return;
 
             messageInput.value = '';
-            ws.send(myId + '::' + msg);
-            appendMessage(msg, 'sent');
-            messageInput.focus();
-        }
 
-        function resetUI() {
-            if (ws) ws.close();
-            joinBtn.disabled = false;
-            roomInput.disabled = false;
-            messageInput.disabled = true;
-            sendBtn.disabled = true;
-            joinBtn.textContent = "Connect";
+            fetch(`https://ntfy.sh_${roomNumber}`, {
+                method: 'POST',
+                body: `${myClientId}::${msg}`
+            })
+            .then(() => {
+                executeFetch();
+                messageInput.focus();
+            })
+            .catch(() => {});
         }
 
         roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connectToRoom(); });
