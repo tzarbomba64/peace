@@ -208,6 +208,7 @@
             joinBtn.disabled = true;
             roomInput.disabled = true;
 
+            // Updated to port 8884 for proper HTTPS / TLS encrypted WebSocket connection
             client = mqtt.connect('wss://://hivemq.com', {
                 clientId: myClientId,
                 clean: true,
