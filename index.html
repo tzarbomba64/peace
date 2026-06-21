@@ -151,7 +151,7 @@
 
     <script>
         let roomNumber = null;
-        let channel = null;
+        let ws = null;
         const myClientId = 'user-' + Math.floor(Math.random() * 10000000);
 
         const chatBox = document.getElementById('chat-box');
@@ -178,19 +178,36 @@
             sendBtn.disabled = false;
             joinBtn.textContent = "Online";
 
-            channel = new BroadcastChannel(`room_${roomNumber}`);
-            
-            channel.onmessage = (event) => {
-                const data = event.data;
-                if (data.senderId !== myClientId) {
-                    appendMessage(data.text, 'received');
+            const apiKey = "o7K6S7h76XwGzX7zN6wG7h76XwGzX7zN"; 
+            const wsUrl = `wss://://piesocket.com{roomNumber}?api_key=${apiKey}&notify_self=0`;
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.senderId !== myClientId) {
+                        appendMessage(data.text, 'received');
+                    }
+                } catch (e) {
+                    if (typeof event.data === "string" && !event.data.includes(myClientId)) {
+                        appendMessage(event.data, 'received');
+                    }
                 }
+            };
+
+            ws.onerror = () => {
+                resetUI();
+            };
+
+            ws.onclose = () => {
+                resetUI();
             };
         }
 
         function sendMessage() {
             const msg = messageInput.value.trim();
-            if (msg === '' || !roomNumber) return;
+            if (msg === '' || !roomNumber || !ws || ws.readyState !== WebSocket.OPEN) return;
 
             messageInput.value = '';
 
@@ -199,9 +216,18 @@
                 text: msg
             };
 
-            channel.postMessage(payload);
+            ws.send(JSON.stringify(payload));
             appendMessage(msg, 'sent');
             messageInput.focus();
+        }
+
+        function resetUI() {
+            if (ws) ws.close();
+            joinBtn.disabled = false;
+            roomInput.disabled = false;
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            joinBtn.textContent = "Connect";
         }
 
         roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connectToRoom(); });
