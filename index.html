@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Peace</title>
+    <title>Chat</title>
     <style>
         :root {
             --bg-dark: #000000;
@@ -152,7 +152,7 @@
     <script>
         let roomNumber = null;
         let ws = null;
-        const myClientId = 'user-' + Math.floor(Math.random() * 10000000);
+        const myId = 'id' + Math.floor(Math.random() * 100000);
 
         const chatBox = document.getElementById('chat-box');
         const roomInput = document.getElementById('room-number');
@@ -178,45 +178,31 @@
             sendBtn.disabled = false;
             joinBtn.textContent = "Online";
 
-            const apiKey = "o7K6S7h76XwGzX7zN6wG7h76XwGzX7zN"; 
-            const wsUrl = `wss://://piesocket.com{roomNumber}?api_key=${apiKey}&notify_self=0`;
-
-            ws = new WebSocket(wsUrl);
+            ws = new WebSocket(`wss://://scaleway.com{roomNumber}/ws`);
 
             ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.senderId !== myClientId) {
-                        appendMessage(data.text, 'received');
-                    }
-                } catch (e) {
-                    if (typeof event.data === "string" && !event.data.includes(myClientId)) {
-                        appendMessage(event.data, 'received');
-                    }
+                const raw = event.data;
+                if (!raw.includes('::')) return;
+                
+                const splitIdx = raw.indexOf('::');
+                const sender = raw.substring(0, splitIdx);
+                const msgText = raw.substring(splitIdx + 2);
+
+                if (sender !== myId) {
+                    appendMessage(msgText, 'received');
                 }
             };
 
-            ws.onerror = () => {
-                resetUI();
-            };
-
-            ws.onclose = () => {
-                resetUI();
-            };
+            ws.onerror = () => resetUI();
+            ws.onclose = () => resetUI();
         }
 
         function sendMessage() {
             const msg = messageInput.value.trim();
-            if (msg === '' || !roomNumber || !ws || ws.readyState !== WebSocket.OPEN) return;
+            if (msg === '' || !ws || ws.readyState !== WebSocket.OPEN) return;
 
             messageInput.value = '';
-
-            const payload = {
-                senderId: myClientId,
-                text: msg
-            };
-
-            ws.send(JSON.stringify(payload));
+            ws.send(myId + '::' + msg);
             appendMessage(msg, 'sent');
             messageInput.focus();
         }
