@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Number Chat</title>
-    <script src="https://unpkg.com"></script>
+    <title>Secure Number Chat</title>
+    <!-- MQTT over WebSockets library for robust cross-device bridging -->
+    <script src="https://cloudflare.com"></script>
 
     <style>
         :root {
@@ -20,33 +21,37 @@
             background-color: var(--bg-dark);
             background-image: linear-gradient(135deg, #000000 0%, #070f2b 100%);
             color: var(--text-color);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             height: 100vh;
+            height: -webkit-fill-available; /* Fix for iOS Safari address bar height */
         }
 
         h2 {
             margin-top: 20px;
+            margin-bottom: 10px;
             color: var(--blue-glow);
             text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+            font-size: 1.5rem;
         }
 
         .top-bar {
             background-color: var(--blue-accent);
             width: 90%;
             max-width: 500px;
-            padding: 15px;
+            padding: 12px;
             border-radius: 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.7);
             display: flex;
             gap: 10px;
             align-items: center;
             justify-content: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             border: 1px solid var(--blue-bright);
+            box-sizing: border-box;
         }
 
         label {
@@ -59,23 +64,25 @@
             background-color: #000000;
             color: var(--blue-glow);
             border: 2px solid var(--blue-bright);
-            padding: 10px;
+            padding: 8px;
             border-radius: 5px;
             font-size: 1.1rem;
-            width: 150px;
+            width: 120px;
             text-align: center;
             outline: none;
+            -webkit-appearance: none; /* Removes iOS input styling styling */
         }
 
         button {
             background-color: var(--blue-bright);
             color: white;
             border: none;
-            padding: 10px 15px;
+            padding: 10px 18px;
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
-            transition: 0.3s;
+            transition: 0.2s;
+            font-size: 0.9rem;
         }
 
         button:hover {
@@ -85,23 +92,26 @@
         }
 
         button:disabled {
-            background-color: #333;
-            color: #777;
+            background-color: #222;
+            color: #666;
             cursor: not-allowed;
             box-shadow: none;
         }
 
         .chat-container {
-            background-color: rgba(7, 15, 43, 0.8);
+            background-color: rgba(7, 15, 43, 0.85);
             width: 90%;
             max-width: 500px;
-            height: 60vh;
+            flex: 1;
+            margin-bottom: 20px;
+            max-height: 65vh;
             border-radius: 10px;
             display: flex;
             flex-direction: column;
             box-shadow: 0 4px 15px rgba(0,0,0,0.7);
             overflow: hidden;
             border: 1px solid var(--blue-bright);
+            box-sizing: border-box;
         }
 
         #chat-box {
@@ -114,22 +124,26 @@
         }
 
         .message {
-            padding: 8px 12px;
-            border-radius: 15px;
+            padding: 10px 14px;
+            border-radius: 18px;
             max-width: 75%;
             word-break: break-word;
+            font-size: 0.95rem;
+            line-height: 1.4;
         }
 
         .message.received {
             background-color: var(--blue-accent);
             border: 1px solid var(--blue-bright);
             align-self: flex-start;
+            border-bottom-left-radius: 4px;
         }
 
         .message.sent {
             background-color: #2b397c;
             color: #fff;
             align-self: flex-end;
+            border-bottom-right-radius: 4px;
         }
 
         .message.system {
@@ -139,14 +153,16 @@
             font-style: italic;
             font-size: 0.85rem;
             text-align: center;
+            padding: 5px;
         }
 
         .bottom-bar {
-            padding: 15px;
+            padding: 12px;
             background-color: #000000;
             display: flex;
             gap: 10px;
             border-top: 1px solid var(--blue-accent);
+            align-items: center;
         }
 
         #message-input {
@@ -157,6 +173,8 @@
             padding: 10px;
             border-radius: 5px;
             outline: none;
+            font-size: 1rem;
+            -webkit-appearance: none;
         }
 
         #message-input:focus {
@@ -169,14 +187,14 @@
     <h2>chat</h2>
 
     <div class="top-bar">
-        <label for="room-number">Enter Number:</label>
-        <input type="number" id="room-number" placeholder="e.g. 5555">
-        <button id="join-btn" onclick="initPeer()">Connect</button>
+        <label for="room-number">Number Key:</label>
+        <input type="number" id="room-number" placeholder="e.g. 9999" inputmode="numeric">
+        <button id="join-btn" onclick="connectToBridge()">Connect</button>
     </div>
 
     <div class="chat-container">
         <div id="chat-box">
-            <div class="message system">Enter a matching number on two different devices/tabs to chat.</div>
+            <div class="message system">Enter a matching number on your PC and iPhone to sync instantly.</div>
         </div>
         <div class="bottom-bar">
             <input type="text" id="message-input" placeholder="Type a message..." disabled>
@@ -185,9 +203,11 @@
     </div>
 
     <script>
-        let peer = null;
-        let conn = null;
-        
+        let client = null;
+        let currentTopic = null;
+    
+        const myClientId = 'client-' + Math.floor(Math.random() * 10000000);
+
         const chatBox = document.getElementById('chat-box');
         const roomInput = document.getElementById('room-number');
         const messageInput = document.getElementById('message-input');
@@ -199,119 +219,79 @@
             msgDiv.className = `message ${type}`;
             msgDiv.textContent = text;
             chatBox.appendChild(msgDiv);
+            // Instant scroll execution
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function initPeer() {
+        function connectToBridge() {
             const roomNumber = roomInput.value.trim();
             if (!roomNumber) {
-                alert("Please enter a number first.");
+                alert("Please enter a numeric key first.");
                 return;
             }
 
             joinBtn.disabled = true;
             roomInput.disabled = true;
-            appendMessage("Connecting to signaling server...", "system");
+            appendMessage("Bypassing firewall constraints...", "system");
 
-            // spec
-            peer = new Peer(`room-${roomNumber}-user-${Math.floor(Math.random() * 10000)}`, {
-                host: '://peerjs.com',
-                port: 443,
-                secure: true,
-                debug: 1
+            client = mqtt.connect('wss://://hivemq.com', {
+                clientId: myClientId,
+                clean: true,
+                connectTimeout: 4000,
+                reconnectPeriod: 2000
             });
 
-            peer.on('open', (id) => {
-                appendMessage("Waiting for someone else to connect to this number...", "system");
+            client.on('connect', () => {
+
+                currentTopic = `sec-num-chat/room-${roomNumber}`;
                 
-                // scan
-                setTimeout(() => {
-                    discoverPeers(roomNumber);
-                }, 1000);
+                client.subscribe(currentTopic, { qos: 1 }, (err) => {
+                    if (!err) {
+                        appendMessage(`Online! Joined Key Room: ${roomNumber}`, "system");
+                        messageInput.disabled = false;
+                        sendBtn.disabled = false;
+                        joinBtn.textContent = "Online";
+                        joinBtn.style.backgroundColor = "rgba(0, 210, 255, 0.2)";
+                        joinBtn.style.color = "var(--blue-glow)";
+                        joinBtn.style.border = "1px solid var(--blue-glow)";
+                    } else {
+                        appendMessage("Subscription fallback triggered.", "system");
+                        resetUI();
+                    }
+                });
             });
 
-            peer.on('connection', (incomingConn) => {
-                handleIncomingConnection(incomingConn);
-            });
-
-            peer.on('error', (err) => {
-                console.error(err);
-                appendMessage(`Connection Error. Retrying...`, "system");
-                resetUI();
-            });
-        }
-
-        function discoverPeers(roomNumber) {
-            // Find active sessions on the server network matching this number prefix
-            if (!peer || peer.destroyed) return;
-            
-            peer.listAllPeers((peers) => {
-                const targets = peers.filter(pId => pId.startsWith(`room-${roomNumber}-`) && pId !== peer.id);
-                if (targets.length > 0) {
-                    // Found a peer! Connect directly
-                    connectToPeer(targets[0]);
+            client.on('message', (topic, payload) => {
+                try {
+                    const data = JSON.parse(payload.toString());
+                    
+                    if (data.senderId === myClientId) {
+                        appendMessage(data.text, 'sent');
+                    } else {
+                        appendMessage(data.text, 'received');
+                    }
+                } catch (e) {
+                    console.error("Payload corruption dropping frame.");
                 }
             });
-        }
 
-        function connectToPeer(targetId) {
-            appendMessage("Found someone! Establishing private tunnel...", "system");
-            conn = peer.connect(targetId, { reliable: true });
-            setupConnectionHandlers();
-        }
-
-        function handleIncomingConnection(incomingConn) {
-            if (conn) return; // Already connected
-            conn = incomingConn;
-            setupConnectionHandlers();
-        }
-
-        function setupConnectionHandlers() {
-            conn.on('open', () => {
-                appendMessage("Connected! Chat session secure.", "system");
-                messageInput.disabled = false;
-                sendBtn.disabled = false;
-                joinBtn.textContent = "Online";
-            });
-
-            conn.on('data', (data) => {
-                appendMessage(data, 'received');
-            });
-
-            conn.on('close', () => {
-                appendMessage("The other person left.", "system");
+            client.on('error', (err) => {
+                appendMessage("Network timeout. Retrying connection...", "system");
                 resetUI();
             });
-            
-            conn.on('error', () => {
-                appendMessage("Connection dropped.", "system");
-                resetUI();
+
+            client.on('close', () => {
+
             });
         }
 
         function sendMessage() {
             const msg = messageInput.value.trim();
-            if (msg !== '' && conn && conn.open) {
-                conn.send(msg);
-                appendMessage(msg, 'sent');
-                messageInput.value = '';
-            }
-        }
-
-        function resetUI() {
-            if(conn) conn.close();
-            if(peer) peer.destroy();
-            conn = null;
-            peer = null;
-            messageInput.disabled = true;
-            sendBtn.disabled = true;
-            joinBtn.disabled = false;
-            roomInput.disabled = false;
-            joinBtn.textContent = "Connect";
-        }
-
-        roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') initPeer(); });
-        messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
-    </script>
-</body>
-</html>
+            if (msg !== '' && client && client.connected && currentTopic) {
+                const payload = {
+                    senderId: myClientId,
+                    text: msg,
+                    timestamp: Date.now()
+                };
+                
+                client.publish(currentTopic, JSON.stringify(payload), { qos: 1 });
