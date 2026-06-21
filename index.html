@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Number Chat</title>
+    <!-- PeerJS for P2P WebRTC Connections -->
+    <script src="https://unpkg.com"></script>
+
+    <style>
+        :root {
+            --bg-dark: #070f2b;
+            --bg-light: #1b1a55;
+            --blue-accent: #535c91;
+            --blue-bright: #9290c3;
+            --text-color: #e6e6e6;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        h2 {
+            margin-top: 20px;
+            color: var(--blue-bright);
+        }
+
+        .top-bar {
+            background-color: var(--bg-light);
+            width: 90%;
+            max-width: 500px;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: var(--blue-bright);
+            font-weight: bold;
+        }
+
+        input[type="number"] {
+            background-color: #000000;
+            color: var(--blue-bright);
+            border: 2px solid var(--blue-accent);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            width: 150px;
+            text-align: center;
+        }
+
+        button {
+            background-color: var(--blue-accent);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--blue-bright);
+            color: var(--bg-dark);
+        }
+
+        .chat-container {
+            background-color: var(--bg-light);
+            width: 90%;
+            max-width: 500px;
+            height: 60vh;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            overflow: hidden;
+            border: 1px solid var(--blue-accent);
+        }
+
+        #chat-box {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            padding: 8px 12px;
+            border-radius: 15px;
+            max-width: 75%;
+            word-break: break-word;
+        }
+
+        .message.received {
+            background-color: var(--blue-accent);
+            align-self: flex-start;
+        }
+
+        .message.sent {
+            background-color: #2b397c;
+            color: #fff;
+            align-self: flex-end;
+        }
+
+        .message.system {
+            background-color: transparent;
+            color: var(--blue-bright);
+            align-self: center;
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+
+        .bottom-bar {
+            padding: 15px;
+            background-color: #0c1033;
+            display: flex;
+            gap: 10px;
+        }
+
+        #message-input {
+            flex: 1;
+            background-color: #000;
+            color: var(--blue-bright);
+            border: 1px solid var(--blue-accent);
+            padding: 10px;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        #message-input:focus {
+            border-color: var(--blue-bright);
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Secure Number Chat</h2>
+
+    <div class="top-bar">
+        <label for="room-number">Enter Room #:</label>
+        <input type="number" id="room-number" placeholder="e.g. 1234">
+        <button id="join-btn" onclick="joinRoom()">Join</button>
+    </div>
+
+    <div class="chat-container">
+        <div id="chat-box">
+            <div class="message system">Enter a number and click Join to start messaging.</div>
+        </div>
+        <div class="bottom-bar">
+            <input type="text" id="message-input" placeholder="Type a message..." disabled>
+            <button id="send-btn" onclick="sendMessage()" disabled>Send</button>
+        </div>
+    </div>
+
+    <script>
+        let peer;
+        let conn;
+        let isConnected = false;
+        let myId = Math.floor(Math.random() * 1000000); // Random user ID
+
+        const chatBox = document.getElementById('chat-box');
+        const roomInput = document.getElementById('room-number');
+        const messageInput = document.getElementById('message-input');
+        const joinBtn = document.getElementById('join-btn');
+        const sendBtn = document.getElementById('send-btn');
+
+        function appendMessage(text, type) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+            msgDiv.textContent = text;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function joinRoom() {
+            const roomNumber = roomInput.value;
+            if (!roomNumber) {
+                alert("Please enter a number first.");
+                return;
+            }
+
+            // Disable UI
+            joinBtn.disabled = true;
+            roomInput.disabled = true;
+            appendMessage(`Joining room ${roomNumber}...`, 'system');
+
+            // Initialize PeerJS
+            // The Peer ID is generated based on the room number, so anyone using the same number connects
+            peer = new Peer(`secret-number-chat-room-${roomNumber}`);
+
+            peer.on('open', (id) => {
+                // Once connected to the network, attempt to connect to the "host" of this room number
+                connectToPeer(`secret-number-chat-room-${roomNumber}`);
+            });
+
+            // Handle incoming P2P connections
+            peer.on('connection', (connection) => {
+                if (isConnected) return;
+                
+                conn = connection;
+                setupConnection();
+            });
+        }
+
+        function connectToPeer(targetPeerId) {
+            conn = peer.connect(targetPeerId);
+            setupConnection();
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                isConnected = true;
+                appendMessage("Connected! You can now talk to anyone on this number.", 'system');
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                joinBtn.textContent = "Connected";
+            });
+
+            conn.on('data', (data) => {
+                appendMessage(data, 'received');
+            });
+
+            conn.on('close', () => {
+                appendMessage("Connection closed.", 'system');
+                resetChat();
+            });
+        }
+
+        function sendMessage() {
+            const msg = messageInput.value;
+            if (msg.trim() !== '' && isConnected) {
+                conn.send(msg);
+                appendMessage(msg, 'sent');
+                messageInput.value = '';
+            }
+        }
+
+        function resetChat() {
+            isConnected = false;
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            joinBtn.disabled = false;
+            roomInput.disabled = false;
+            joinBtn.textContent = "Join";
+            if(peer) peer.destroy();
+        }
+
+        // Allow 'Enter' key to trigger Join/Send
+        roomInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') joinRoom();
+        });
+        
+        messageInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
