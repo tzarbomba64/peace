@@ -151,12 +151,8 @@
 
     <script>
         let roomNumber = null;
-        let pollInterval = null;
-        let lastTimestamp = "1970-01-01T00:00:00.000Z";
+        let channel = null;
         const myClientId = 'user-' + Math.floor(Math.random() * 10000000);
-        
-        const endpoint = 'https://supabase.co';
-        const publicToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsZmtudW53c2t2cGtmeXJ2dW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTI2MDUwMDAsImV4cCI6MjA4MDU4MTAwMH0.3_X8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ8gXQ';
 
         const chatBox = document.getElementById('chat-box');
         const roomInput = document.getElementById('room-number');
@@ -182,34 +178,14 @@
             sendBtn.disabled = false;
             joinBtn.textContent = "Online";
 
-            fetchMessages();
-            pollInterval = setInterval(fetchMessages, 1000);
-        }
-
-        function fetchMessages() {
-            if (!roomNumber) return;
-
-            fetch(`${endpoint}?room_id=eq.${roomNumber}&created_at=gt.${lastTimestamp}&order=created_at.asc`, {
-                headers: {
-                    'apikey': publicToken,
-                    'Authorization': `Bearer ${publicToken}`
+            channel = new BroadcastChannel(`room_${roomNumber}`);
+            
+            channel.onmessage = (event) => {
+                const data = event.data;
+                if (data.senderId !== myClientId) {
+                    appendMessage(data.text, 'received');
                 }
-            })
-            .then(res => res.json())
-            .then(messages => {
-                if (!Array.isArray(messages)) return;
-                messages.forEach(msg => {
-                    if (msg.created_at > lastTimestamp) {
-                        lastTimestamp = msg.created_at;
-                    }
-                    if (msg.sender_id !== myClientId) {
-                        appendMessage(msg.text, 'received');
-                    } else {
-                        appendMessage(msg.text, 'sent');
-                    }
-                });
-            })
-            .catch(() => {});
+            };
         }
 
         function sendMessage() {
@@ -218,25 +194,14 @@
 
             messageInput.value = '';
 
-            fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'apikey': publicToken,
-                    'Authorization': `Bearer ${publicToken}`,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'return=minimal'
-                },
-                body: JSON.stringify({
-                    room_id: parseInt(roomNumber),
-                    sender_id: myClientId,
-                    text: msg
-                })
-            })
-            .then(() => {
-                fetchMessages();
-                messageInput.focus();
-            })
-            .catch(() => {});
+            const payload = {
+                senderId: myClientId,
+                text: msg
+            };
+
+            channel.postMessage(payload);
+            appendMessage(msg, 'sent');
+            messageInput.focus();
         }
 
         roomInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') connectToRoom(); });
